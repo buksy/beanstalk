@@ -105,3 +105,32 @@ func (t *Tube) Pause(d time.Duration) error {
 	}
 	return nil
 }
+
+// Reserve reserves and returns a job from one of the tubes in t. If no
+// job is available before time timeout has passed, Reserve returns a
+// ConnError recording ErrTimeout.
+//
+// If a timeout value is not specified this will become a blocking call
+// and will be blocked till tube recives a job.
+//
+// Typically, a client will reserve a job, perform some work, then delete
+// the job with Conn.Delete.
+func (t *Tube) Reserve(timeout time.Duration) (id uint64, body []byte, err error) {
+	var r req
+	ts := TubeSet{}
+	ts.Name = make(map[string]bool)
+	ts.Name[t.Name] = true
+	if timeout > 0 {
+		r, err = t.Conn.cmd(nil, &ts, nil, "reserve-with-timeout", dur(timeout))
+	} else {
+		r, err = t.Conn.cmd(nil, &ts, nil, "reserve")
+	}
+	if err != nil {
+		return 0, nil, err
+	}
+	body, err = t.Conn.readResp(r, true, "RESERVED %d", &id)
+	if err != nil {
+		return 0, nil, err
+	}
+	return id, body, nil
+}
